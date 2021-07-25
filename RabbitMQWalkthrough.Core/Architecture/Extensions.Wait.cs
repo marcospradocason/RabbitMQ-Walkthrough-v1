@@ -10,12 +10,26 @@ namespace RabbitMQWalkthrough.Core.Architecture
 {
     public static partial class Extensions
     {
-        public static void Wait(this TimeSpan time)        
+        public static void Wait(this TimeSpan time)
         {
             //var are = new AutoResetEvent(false);
             //are.WaitOne(time);
 
             System.Threading.Thread.Sleep(time);
+        }
+
+        public static RateLimiter.TimeLimiter BuildRateLimiter(this int executionsPerSecond)
+        {
+            int seconds = 1;
+            int executionsPerTime = executionsPerSecond;
+            while (seconds < 5)
+            {
+                executionsPerTime += executionsPerSecond;
+                seconds += 1;
+            }
+
+            var limiter = RateLimiter.TimeLimiter.GetFromMaxCountByInterval(executionsPerTime, TimeSpan.FromSeconds(seconds));
+            return limiter;
         }
 
 

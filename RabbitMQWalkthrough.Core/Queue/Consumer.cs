@@ -1,7 +1,9 @@
-﻿using RabbitMQ.Client;
+﻿using ComposableAsync;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQWalkthrough.Core.Architecture;
 using RabbitMQWalkthrough.Core.Model;
+using RateLimiter;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,7 +17,13 @@ namespace RabbitMQWalkthrough.Core.Queue
     {
         private readonly IModel model;
         private readonly string queue;
-        private EventingBasicConsumer eventingBasicConsumer;
+        private AsyncEventingBasicConsumer eventingBasicConsumer;
+        private TimeLimiter timeConstraint;
+
+        public int MessagesPerSecond { get; }
+
+        public string Id { get; }
+
         public string ConsumerTag { get; private set; }
 
 
@@ -26,17 +34,16 @@ namespace RabbitMQWalkthrough.Core.Queue
             this.MessagesPerSecond = messagesPerSecond;
             this.Id = Guid.NewGuid().ToString("D");
 
-            this.eventingBasicConsumer = new EventingBasicConsumer(model);
+            this.eventingBasicConsumer = new AsyncEventingBasicConsumer(model);
             this.eventingBasicConsumer.Received += this.OnMessage;
+
+            this.timeConstraint = messagesPerSecond.BuildRateLimiter();
         }
+       
 
-        public int MessagesPerSecond { get; }
-
-        public string Id { get; }
-
-        private void OnMessage(object sender, BasicDeliverEventArgs e)
+        private async Task OnMessage(object sender, BasicDeliverEventArgs e)
         {
-            this.MessagesPerSecond.AsMessageRateToSleepTimeSpan().Wait();
+            await this.timeConstraint;
 
             Message message = e.Body.ToArray().ToUTF8String().Deserialize<Message>();
 

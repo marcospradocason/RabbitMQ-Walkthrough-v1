@@ -1,8 +1,10 @@
 ﻿
+using ComposableAsync;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQWalkthrough.Core.Architecture;
 using RabbitMQWalkthrough.Core.Model;
+using RateLimiter;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +20,10 @@ namespace RabbitMQWalkthrough.Core.Queue
         private readonly string exchange;
         private Thread runThread;
         private volatile bool isRunning;
+        private TimeLimiter timeConstraint;
+
+        public int MessagesPerSecond { get; }
+        public string Id { get; }
 
         public Publisher(IModel model, string exchange, int messagesPerSecond)
         {
@@ -26,16 +32,18 @@ namespace RabbitMQWalkthrough.Core.Queue
             this.MessagesPerSecond = messagesPerSecond;
             this.Id = Guid.NewGuid().ToString("D");
 
+            this.timeConstraint = messagesPerSecond.BuildRateLimiter();
+
             //model.ConfirmSelect();
 
-            this.runThread = new Thread(() =>
+            this.runThread = new Thread(async () =>
             {
                 long count = 0;
                 while (this.isRunning)
                 {
                     count++;
 
-                    this.MessagesPerSecond.AsMessageRateToSleepTimeSpan().Wait();
+                    await this.timeConstraint;
 
 
                     var message = new Message()
@@ -54,9 +62,6 @@ namespace RabbitMQWalkthrough.Core.Queue
             });
         }
 
-        public int MessagesPerSecond { get; }
-
-        public string Id { get; }
 
         public Publisher Start()
         {
